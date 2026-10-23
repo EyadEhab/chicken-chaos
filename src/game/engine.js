@@ -87,7 +87,7 @@ export class SpaceGame {
     this.points = 0;
     this.ultT = 0;
     this.ultMax = 18;
-    this.spawnT = 0;
+    this.spawnT = 1.6;
     this.msgT = 6;
     this.shake = 0;
     this.flashRed = 0;
@@ -235,7 +235,7 @@ export class SpaceGame {
       maxHp: this.ship.maxHp,
       level: this.level,
       xp: this.xp,
-      xpNeed: this.xpNeed,
+      xpNeed: this.xpNeed(),
       points: this.points,
       combo: this.combo,
       mult: this.mult(),
@@ -319,10 +319,10 @@ export class SpaceGame {
     if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; }
 
     this.spawnT -= dt;
-    const spawnEvery = clamp(1.05 - this.time * 0.011, 0.3, 1.05);
+    const spawnEvery = clamp(1.3 - this.time * 0.01, 0.3, 1.3);
     if (this.spawnT <= 0) {
       this.spawnT = spawnEvery;
-      this.spawn(1 + Math.floor(this.time / 40));
+      this.spawn(Math.min(3, 1 + Math.floor(this.time / 50)));
     }
 
     this.msgT -= dt;
@@ -376,7 +376,7 @@ export class SpaceGame {
       } else if (e.y - e.r > h) {
         e.hp = 0;
         e.gone = true;
-        this.hurt(e.kind === "bomb" ? 22 : 9);
+        this.hurt(e.kind === "bomb" ? 20 : 6);
         this.explode(e.x, h - 6, e.r, e.kind === "bomb" ? "#ffd166" : "#ff5d73");
       }
     }
@@ -459,11 +459,10 @@ export class SpaceGame {
     const t = this.time;
     const pool = [];
     for (const T of TYPES) pool.push({ T, w: T.w });
-    const bonusW = 0.9 + Math.min(1.6, t / 45);
     for (const B of BONUS) {
       let w = B.w;
       if (B.kind === "bomb") w *= 1 + Math.min(1.6, t / 50);
-      pool.push({ T: B, w, bonus: true });
+      pool.push({ T: B, w });
     }
     const total = pool.reduce((s, p) => s + p.w, 0);
     for (let i = 0; i < count; i++) {
@@ -472,8 +471,10 @@ export class SpaceGame {
       for (const p of pool) { r -= p.w; if (r <= 0) { def = p; break; } }
       const T = def.T;
       const size = this.h * T.r;
+      const x0 = Math.min(size + 4, this.w / 2);
+      const x1 = Math.max(x0, this.w - size - 4);
       this.enemies.push({
-        x: rnd(size + 8, this.w - size - 8),
+        x: rnd(x0, x1),
         y: -size - rnd(0, 60),
         r: size,
         hp: T.hp || 1,
@@ -490,7 +491,6 @@ export class SpaceGame {
         ph: Math.random() * 9,
         flash: 0,
         gone: false,
-        bonus,
       });
     }
   }
@@ -500,7 +500,7 @@ export class SpaceGame {
     this.score += pts;
     this.combo++;
     this.comboT = 2.6;
-    if (STREAK.includes(this.combo)) {
+    if (STREAKS.includes(this.combo)) {
       this.floats.push({ x: this.w / 2, y: this.h * 0.3, t: STREAK_TEXT[this.combo], c: "#ffe66d", life: 1.4, vy: -20, size: 34, big: true });
       this.shake = Math.max(this.shake, 8);
     }
