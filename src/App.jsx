@@ -209,7 +209,7 @@ export default function App() {
           {panel === "skills" && (
             <div className="overlay">
               <div className="sheet">
-                <h3>🛠️ SKILL POINTS: <b>{stats.points}</b></h3>
+                <h3>🛠️ SKILL POINTS: <b>{stats.points}</b> <small className="tiny">— click a skill to upgrade</small></h3>
                 <p className="tiny">Level {stats.level} · {stats.xp}/{stats.xpNeed} XP to next</p>
                 <div className="skills">
                   {SKILLS.map((s) => {
@@ -227,9 +227,7 @@ export default function App() {
                     );
                   })}
                 </div>
-                <button className="btn" disabled={stats.points > 0 && stats.up} onClick={closePanel}>
-                  {stats.points > 0 && stats.up ? "Spend your points first!" : "Back to chaos"}
-                </button>
+                <button className="btn" onClick={closePanel}>Back to chaos</button>
               </div>
             </div>
           )}
