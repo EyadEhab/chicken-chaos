@@ -216,6 +216,7 @@ input:focus { outline: none; border-color: var(--neon); box-shadow: 0 0 0 4px rg
 
 /* ---------- leaderboard ---------- */
 .board h3 { margin: 0 0 10px; letter-spacing: 1px; font-size: .95rem; color: var(--neon); }
+.board .dot { float: right; font-size: .7rem; color: var(--dim); letter-spacing: .5px; text-transform: uppercase; }
 .board ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .board li {
   display: grid; grid-template-columns: 34px 1fr auto auto; gap: 10px; align-items: center;

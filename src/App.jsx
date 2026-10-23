@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpaceGame, SKILLS } from "./game/engine";
+import { live as liveOn, fetchTop, submitScore, mergeBoards } from "./api";
 
 const DB = "astrochaos:players"; // { [name]: { best, games, kills? } }
 const ME = "astrochaos:me";
@@ -31,7 +32,7 @@ const pick = (a) => a[(Math.random() * a.length) | 0];
 const rankOf = (s) => (RANKS.find(([m]) => s >= m) || RANKS[RANKS.length - 1])[1];
 
 const EMPTY = {
-  score: 0, hp: 60, maxHp: 60, level: 1, xp: 0, xpNeed: 205,
+  score: 0, hp: 50, maxHp: 50, level: 1, xp: 0, xpNeed: 205,
   points: 0, up: false, combo: 0, mult: 1, ult: 0, time: 0,
   skills: { rate: 0, multi: 0, hull: 0, pierce: 0, magnet: 0 },
 };
@@ -40,6 +41,7 @@ export default function App() {
   const [me, setMe] = useState(() => { try { return localStorage.getItem(ME) || ""; } catch { return ""; } });
   const [name, setName] = useState("");
   const [players, setPlayers] = useState(load);
+  const [remoteBoard, setRemoteBoard] = useState([]);
   const [phase, setPhase] = useState("menu"); // menu | play | over
   const [stats, setStats] = useState(EMPTY);
   const [panel, setPanel] = useState(null); // null | "skills" | "pause"
@@ -74,6 +76,17 @@ export default function App() {
     setPhase("play");
   }, []);
 
+  const refreshRemote = useCallback(() => {
+    if (!liveOn) return;
+    fetchTop(60)
+      .then((rows) => setRemoteBoard(rows))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshRemote();
+  }, [refreshRemote, phase, me]);
+
   useEffect(() => {
     if (phase !== "play" || !canvasRef.current) return;
     const game = new SpaceGame(canvasRef.current, {
@@ -90,6 +103,7 @@ export default function App() {
         setNewBest(score > p.best && score > 0);
         d[meRef.current] = { best, games: p.games + 1 };
         save(d); setPlayers(d);
+        submitScore(meRef.current, score).then(refreshRemote).catch(() => {});
         setResult({ score, time, level, line: pick(OVER_LINES) });
         setPanel(null);
         setPhase("over");
@@ -114,10 +128,8 @@ export default function App() {
 
   const useUlt = () => gameRef.current?.useUlt();
 
-  const board = Object.entries(players)
-    .map(([n, v]) => ({ n, ...v }))
-    .sort((a, b) => b.best - a.best)
-    .slice(0, 10);
+  const merged = mergeBoards(players, remoteBoard);
+  const board = merged.slice(0, 10);
 
   if (!me) {
     return (
@@ -140,7 +152,7 @@ export default function App() {
     );
   }
 
-  const meBest = players[me]?.best ?? 0;
+  const meBest = merged.find((p) => p.n === me)?.best ?? 0;
 
   return (
     <main className="app">
@@ -247,7 +259,7 @@ export default function App() {
       )}
 
       <section className="board">
-        <h3>🏆 GALACTIC LEADERBOARD</h3>
+        <h3>🏆 GALACTIC LEADERBOARD <span className="dot">{liveOn ? "· live" : "· this device"}</span></h3>
         {board.length === 0 ? (
           <p className="tiny">Nobody has embarrassed themselves yet.</p>
         ) : (

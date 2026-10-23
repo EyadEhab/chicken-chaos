@@ -1,17 +1,17 @@
 export const SKILLS = [
   { key: "rate", icon: "🔫", name: "Trigger Finger", desc: "+18% fire rate", max: 3 },
   { key: "multi", icon: "🌪️", name: "Shotgun Diplomacy", desc: "+1 bullet per shot", max: 2 },
-  { key: "hull", icon: "🥫", name: "Cardboard Armor", desc: "+30 max HP & heal 30", max: 5 },
+  { key: "hull", icon: "🥫", name: "Cardboard Armor", desc: "+25 max HP & heal 25", max: 5 },
   { key: "pierce", icon: "🪡", name: "Personal Space? Never", desc: "Bullets pierce +1 enemy", max: 3 },
   { key: "magnet", icon: "🧲", name: "Snack Magnet", desc: "Loot flies to you", max: 3 },
 ];
 
 const TYPES = [
-  { e: "👽", hp: 1, r: 0.032, vy: 0.13, sc: 10, xp: 16, w: 4, dmg: 10 },
-  { e: "🛸", hp: 2, r: 0.037, vy: 0.11, sc: 18, xp: 24, w: 3, dmg: 12, wob: 0.7 },
-  { e: "👾", hp: 2, r: 0.03, vy: 0.17, sc: 24, xp: 28, w: 3, dmg: 12 },
-  { e: "🪨", hp: 5, r: 0.046, vy: 0.085, sc: 38, xp: 44, w: 2, dmg: 16 },
-  { e: "💀", hp: 3, r: 0.03, vy: 0.21, sc: 48, xp: 54, w: 1.4, dmg: 18 },
+  { e: "👽", hp: 1, r: 0.032, vy: 0.13, sc: 10, xp: 16, w: 4, dmg: 12 },
+  { e: "🛸", hp: 2, r: 0.037, vy: 0.11, sc: 18, xp: 24, w: 3, dmg: 14, wob: 0.7 },
+  { e: "👾", hp: 2, r: 0.03, vy: 0.17, sc: 24, xp: 28, w: 3, dmg: 14 },
+  { e: "🪨", hp: 5, r: 0.046, vy: 0.085, sc: 38, xp: 44, w: 2, dmg: 18 },
+  { e: "💀", hp: 3, r: 0.03, vy: 0.21, sc: 48, xp: 54, w: 1.4, dmg: 20 },
 ];
 
 const BONUS = [
@@ -91,7 +91,7 @@ export class SpaceGame {
     this.beam = 0;
     this.fireT = 0;
 
-    this.ship = { x: 0, y: 0, tx: 0, tilt: 0, hp: 60, maxHp: 60, inv: 0, r: 20 };
+    this.ship = { x: 0, y: 0, tx: 0, tilt: 0, hp: 50, maxHp: 50, inv: 0, r: 20 };
 
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
@@ -208,7 +208,7 @@ export class SpaceGame {
     if (this.cb.onPause) this.cb.onPause(p);
   }
 
-  get maxHp() { return 60 + 30 * this.skills.hull; }
+  get maxHp() { return 50 + 25 * this.skills.hull; }
   canUpgrade() { return this.points > 0 && SKILLS.some((s) => this.skills[s.key] < s.max); }
 
   spend(key) {
@@ -218,7 +218,7 @@ export class SpaceGame {
     this.skills[key]++;
     if (key === "hull") {
       this.ship.maxHp = this.maxHp;
-      this.ship.hp = Math.min(this.ship.maxHp, this.ship.hp + 30);
+      this.ship.hp = Math.min(this.ship.maxHp, this.ship.hp + 25);
     } else {
       this.ship.maxHp = this.maxHp;
     }
@@ -396,7 +396,7 @@ export class SpaceGame {
       } else if (e.y - e.r > h) {
         e.hp = 0;
         e.gone = true;
-        this.hurt(e.kind === "bomb" ? 25 : 10);
+        this.hurt(e.kind === "bomb" ? 30 : 12);
         this.explode(e.x, h - 6, e.r, e.kind === "bomb" ? "#ffd166" : "#ff5d73");
       }
     }
@@ -546,10 +546,10 @@ export class SpaceGame {
       }
     }
     if (e.kind === "enemy" && Math.random() < 0.3) {
-      this.pickups.push({ x: e.x, y: e.y, vy: 40, vy0: 0.1, kind: "star", ph: Math.random() * 9, r: this.h * 0.026, dead: false });
+      this.pickups.push({ e: "⭐", x: e.x, y: e.y, vy: 40, vy0: 0.1, kind: "star", ph: Math.random() * 9, r: this.h * 0.026, dead: false });
     }
     if (e.kind === "enemy" && Math.random() < 0.1 && this.ship.hp < this.ship.maxHp * 0.8) {
-      this.pickups.push({ x: e.x + rnd(-30, 30), y: e.y, vy: 40, vy0: 0.1, kind: "pizza", ph: Math.random() * 9, r: this.h * 0.028, dead: false });
+      this.pickups.push({ e: "🍕", x: e.x + rnd(-30, 30), y: e.y, vy: 40, vy0: 0.1, kind: "pizza", ph: Math.random() * 9, r: this.h * 0.028, dead: false });
     }
     this.pushStats(true);
   }
@@ -589,7 +589,7 @@ export class SpaceGame {
   hurt(n) {
     if (this.ship.inv > 0) return;
     this.ship.hp -= n;
-    this.ship.inv = 0.9;
+    this.ship.inv = 0.75;
     this.combo = 0;
     this.shake = Math.max(this.shake, 14);
     this.flashRed = 0.55;
@@ -677,7 +677,7 @@ export class SpaceGame {
       ctx.font = p.font;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(p.e, 0, 0);
+      ctx.fillText(p.e || (p.kind === "star" ? "⭐" : "🍕"), 0, 0);
       ctx.restore();
     }
 
