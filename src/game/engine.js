@@ -1,20 +1,17 @@
 export const SKILLS = [
-  { key: "rate", icon: "🔫", name: "Trigger Finger", desc: "+18% fire rate", max: 6 },
-  { key: "dmg", icon: "💥", name: "Big Bada Boom", desc: "+25% damage", max: 6 },
-  { key: "multi", icon: "🌪️", name: "Shotgun Diplomacy", desc: "+1 bullet per shot", max: 3 },
-  { key: "speed", icon: "🩴", name: "Turbo Socks", desc: "+15% move speed", max: 4 },
-  { key: "hull", icon: "🥫", name: "Cardboard Armor", desc: "+40 max HP & heal 40", max: 5 },
+  { key: "rate", icon: "🔫", name: "Trigger Finger", desc: "+18% fire rate", max: 3 },
+  { key: "multi", icon: "🌪️", name: "Shotgun Diplomacy", desc: "+1 bullet per shot", max: 2 },
+  { key: "hull", icon: "🥫", name: "Cardboard Armor", desc: "+30 max HP & heal 30", max: 5 },
   { key: "pierce", icon: "🪡", name: "Personal Space? Never", desc: "Bullets pierce +1 enemy", max: 3 },
-  { key: "crit", icon: "🍀", name: "Suspicious Luck", desc: "+8% crit chance (2.5x)", max: 4 },
   { key: "magnet", icon: "🧲", name: "Snack Magnet", desc: "Loot flies to you", max: 3 },
 ];
 
 const TYPES = [
-  { e: "👽", hp: 1, r: 0.032, vy: 0.13, sc: 10, xp: 16, w: 4, dmg: 8 },
-  { e: "🛸", hp: 2, r: 0.037, vy: 0.11, sc: 18, xp: 24, w: 3, dmg: 10, wob: 0.7 },
-  { e: "👾", hp: 2, r: 0.03, vy: 0.17, sc: 24, xp: 28, w: 3, dmg: 10 },
-  { e: "🪨", hp: 5, r: 0.046, vy: 0.085, sc: 38, xp: 44, w: 2, dmg: 14 },
-  { e: "💀", hp: 3, r: 0.03, vy: 0.21, sc: 48, xp: 54, w: 1.4, dmg: 16 },
+  { e: "👽", hp: 1, r: 0.032, vy: 0.13, sc: 10, xp: 16, w: 4, dmg: 10 },
+  { e: "🛸", hp: 2, r: 0.037, vy: 0.11, sc: 18, xp: 24, w: 3, dmg: 12, wob: 0.7 },
+  { e: "👾", hp: 2, r: 0.03, vy: 0.17, sc: 24, xp: 28, w: 3, dmg: 12 },
+  { e: "🪨", hp: 5, r: 0.046, vy: 0.085, sc: 38, xp: 44, w: 2, dmg: 16 },
+  { e: "💀", hp: 3, r: 0.03, vy: 0.21, sc: 48, xp: 54, w: 1.4, dmg: 18 },
 ];
 
 const BONUS = [
@@ -67,7 +64,7 @@ export class SpaceGame {
     this.keys = {};
     this.drag = false;
     this.sig = "";
-    this.skills = { rate: 0, dmg: 0, multi: 0, speed: 0, hull: 0, pierce: 0, crit: 0, magnet: 0 };
+    this.skills = { rate: 0, multi: 0, hull: 0, pierce: 0, magnet: 0 };
 
     this.bullets = [];
     this.enemies = [];
@@ -87,14 +84,14 @@ export class SpaceGame {
     this.points = 0;
     this.ultT = 0;
     this.ultMax = 18;
-    this.spawnT = 1.6;
+    this.spawnT = 1.2;
     this.msgT = 6;
     this.shake = 0;
     this.flashRed = 0;
     this.beam = 0;
     this.fireT = 0;
 
-    this.ship = { x: 0, y: 0, tx: 0, tilt: 0, hp: 100, maxHp: 100, inv: 0, r: 20 };
+    this.ship = { x: 0, y: 0, tx: 0, tilt: 0, hp: 60, maxHp: 60, inv: 0, r: 20 };
 
     this.onResize = this.onResize.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
@@ -140,16 +137,39 @@ export class SpaceGame {
   onResize() {
     const r = this.canvas.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+    if (r.width * dpr > 1900) dpr = Math.max(1, 1900 / r.width);
     this.canvas.width = Math.round(r.width * dpr);
     this.canvas.height = Math.round(r.height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.w = r.width;
     this.h = r.height;
+    this.bgG = null;
     this.ship.y = this.h - Math.max(56, this.h * 0.1);
     this.ship.x = clamp(this.ship.x || this.w / 2, 20, this.w - 20);
     this.ship.tx = clamp(this.ship.tx || this.w / 2, 20, this.w - 20);
     this.ship.r = Math.max(16, this.h * 0.03);
+  }
+
+  buildBg() {
+    const { ctx, w, h } = this;
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, "#05030f");
+    g.addColorStop(0.5, "#0a0a1f");
+    g.addColorStop(1, "#12082a");
+    this.bgG = g;
+    const n1 = ctx.createRadialGradient(w * 0.2, h * 0.25, 10, w * 0.2, h * 0.25, h * 0.6);
+    n1.addColorStop(0, "rgba(120,60,255,0.20)");
+    n1.addColorStop(1, "rgba(120,60,255,0)");
+    this.neb1 = n1;
+    const n2 = ctx.createRadialGradient(w * 0.85, h * 0.7, 10, w * 0.85, h * 0.7, h * 0.55);
+    n2.addColorStop(0, "rgba(0,220,255,0.14)");
+    n2.addColorStop(1, "rgba(0,220,255,0)");
+    this.neb2 = n2;
+    const v = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.75);
+    v.addColorStop(0, "rgba(255,0,60,0)");
+    v.addColorStop(1, "rgba(255,20,60,0.7)");
+    this.vigG = v;
   }
 
   local(e) {
@@ -188,7 +208,8 @@ export class SpaceGame {
     if (this.cb.onPause) this.cb.onPause(p);
   }
 
-  get maxHp() { return 100 + 40 * this.skills.hull; }
+  get maxHp() { return 60 + 30 * this.skills.hull; }
+  canUpgrade() { return this.points > 0 && SKILLS.some((s) => this.skills[s.key] < s.max); }
 
   spend(key) {
     const s = SKILLS.find((x) => x.key === key);
@@ -196,9 +217,8 @@ export class SpaceGame {
     this.points--;
     this.skills[key]++;
     if (key === "hull") {
-      const d = 40;
       this.ship.maxHp = this.maxHp;
-      this.ship.hp = Math.min(this.ship.maxHp, this.ship.hp + d);
+      this.ship.hp = Math.min(this.ship.maxHp, this.ship.hp + 30);
     } else {
       this.ship.maxHp = this.maxHp;
     }
@@ -237,6 +257,7 @@ export class SpaceGame {
       xp: this.xp,
       xpNeed: this.xpNeed(),
       points: this.points,
+      up: this.canUpgrade(),
       combo: this.combo,
       mult: this.mult(),
       ult: this.ultT / this.ultMax,
@@ -289,7 +310,6 @@ export class SpaceGame {
   update(dt) {
     this.time += dt;
     const { w, h, ship } = this;
-    const spdMul = 1 + Math.min(1.5, this.time / 65);
 
     for (const s of this.stars) {
       s.y += dt * (0.03 + 0.12 * s.z);
@@ -298,7 +318,7 @@ export class SpaceGame {
 
     const left = this.keys["a"] || this.keys["arrowleft"];
     const right = this.keys["d"] || this.keys["arrowright"];
-    const moveSpeed = w * 1.15 * (1 + 0.15 * this.skills.speed);
+    const moveSpeed = w * 1.1;
     if (left) { ship.tx -= moveSpeed * dt; ship.dragOff = 0.12; }
     if (right) { ship.tx += moveSpeed * dt; ship.dragOff = 0.12; }
     ship.tx = clamp(ship.tx, 16, w - 16);
@@ -319,10 +339,10 @@ export class SpaceGame {
     if (this.comboT <= 0 && this.combo > 0) { this.combo = 0; }
 
     this.spawnT -= dt;
-    const spawnEvery = clamp(1.3 - this.time * 0.01, 0.3, 1.3);
+    const spawnEvery = clamp(1.0 - this.time * 0.012, 0.24, 1.0);
     if (this.spawnT <= 0) {
       this.spawnT = spawnEvery;
-      this.spawn(Math.min(3, 1 + Math.floor(this.time / 50)));
+      this.spawn(Math.min(4, 1 + Math.floor(this.time / 35)));
     }
 
     this.msgT -= dt;
@@ -376,7 +396,7 @@ export class SpaceGame {
       } else if (e.y - e.r > h) {
         e.hp = 0;
         e.gone = true;
-        this.hurt(e.kind === "bomb" ? 20 : 6);
+        this.hurt(e.kind === "bomb" ? 25 : 10);
         this.explode(e.x, h - 6, e.r, e.kind === "bomb" ? "#ffd166" : "#ff5d73");
       }
     }
@@ -386,13 +406,10 @@ export class SpaceGame {
       for (const e of this.enemies) {
         if (e.gone || e.hp <= 0) continue;
         if (Math.hypot(b.x - e.x, b.y - e.y) < e.r + b.r) {
-          const crit = Math.random() < this.critChance;
-          const dmg = b.dmg * (crit ? 2.5 : 1);
-          e.hp -= dmg;
+          e.hp -= b.dmg;
           e.flash = 1;
           b.hits++;
-          this.burst(b.x, b.y, crit ? 7 : 4, crit ? "#ffe66d" : "#7ef9ff", crit ? 1.4 : 1);
-          if (crit) this.floats.push({ x: e.x, y: e.y, t: "CRIT!", c: "#ffe66d", life: 0.7, vy: -70, size: 22 });
+          this.burst(b.x, b.y, 4, "#7ef9ff", 1);
           if (e.hp <= 0) {
             e.gone = true;
             this.kill(e);
@@ -429,12 +446,10 @@ export class SpaceGame {
     this.floats = this.floats.filter((f) => f.life > 0);
   }
 
-  get critChance() { return 0.08 * this.skills.crit; }
-
   fire() {
     const n = 1 + this.skills.multi;
     const h = this.h;
-    const dmg = (9 + this.time * 0.04) * (1 + 0.25 * this.skills.dmg);
+    const dmg = 9 * (1 + Math.min(1, this.time / 110));
     const spread = 0.13;
     for (let i = 0; i < n; i++) {
       const a = -Math.PI / 2 + (i - (n - 1) / 2) * spread;
@@ -455,13 +470,13 @@ export class SpaceGame {
   }
 
   spawn(count = 1) {
-    if (this.enemies.length > 42) return;
+    if (this.enemies.length > 30) return;
     const t = this.time;
     const pool = [];
     for (const T of TYPES) pool.push({ T, w: T.w });
     for (const B of BONUS) {
       let w = B.w;
-      if (B.kind === "bomb") w *= 1 + Math.min(1.6, t / 50);
+      if (B.kind === "bomb") w *= 1 + Math.min(1.8, t / 40);
       pool.push({ T: B, w });
     }
     const total = pool.reduce((s, p) => s + p.w, 0);
@@ -479,7 +494,7 @@ export class SpaceGame {
         r: size,
         hp: T.hp || 1,
         maxHp: T.hp || 1,
-        vy: this.h * T.vy * (1 + Math.min(1.4, t / 60)),
+        vy: this.h * T.vy * (1 + Math.min(1.9, t / 42)),
         e: T.e,
         kind: T.kind || "enemy",
         dmg: T.dmg || 8,
@@ -563,10 +578,11 @@ export class SpaceGame {
       ups++;
     }
     if (ups) {
-      this.floats.push({ x: this.w / 2, y: this.h * 0.45, t: "LEVEL " + this.level + " — SKILL POINT!", c: "#7ef9ff", life: 1.6, vy: -14, size: 30, big: true });
+      const up = this.canUpgrade();
+      this.floats.push({ x: this.w / 2, y: this.h * 0.45, t: "LEVEL " + this.level + (up ? " — SKILL POINT!" : " — MAXED OUT"), c: "#7ef9ff", life: 1.6, vy: -14, size: 30, big: true });
       this.rings.push({ x: this.ship.x, y: this.ship.y, r: 10, max: this.h * 0.5, life: 0.7, t: 0, c: "#7ef9ff" });
       this.pushStats(true);
-      if (this.cb.onLevelUp) this.cb.onLevelUp();
+      if (up && this.cb.onLevelUp) this.cb.onLevelUp();
     }
   }
 
@@ -603,6 +619,8 @@ export class SpaceGame {
         c: color,
       });
     }
+    const cap = 240;
+    if (this.parts.length > cap) this.parts.splice(0, this.parts.length - cap);
   }
 
   explode(x, y, r, color) {
@@ -619,30 +637,21 @@ export class SpaceGame {
     const sh = this.shake;
     if (sh > 0.5) ctx.translate(rnd(-sh, sh) * 0.4, rnd(-sh, sh) * 0.4);
 
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, "#05030f");
-    g.addColorStop(0.5, "#0a0a1f");
-    g.addColorStop(1, "#12082a");
-    ctx.fillStyle = g;
+    if (!this.bgG) this.buildBg();
+    ctx.fillStyle = this.bgG;
     ctx.fillRect(-20, -20, w + 40, h + 40);
-
-    const n1 = ctx.createRadialGradient(w * 0.2, h * 0.25, 10, w * 0.2, h * 0.25, h * 0.6);
-    n1.addColorStop(0, "rgba(120,60,255,0.20)");
-    n1.addColorStop(1, "rgba(120,60,255,0)");
-    ctx.fillStyle = n1;
+    ctx.fillStyle = this.neb1;
     ctx.fillRect(0, 0, w, h);
-    const n2 = ctx.createRadialGradient(w * 0.85, h * 0.7, 10, w * 0.85, h * 0.7, h * 0.55);
-    n2.addColorStop(0, "rgba(0,220,255,0.14)");
-    n2.addColorStop(1, "rgba(0,220,255,0)");
-    ctx.fillStyle = n2;
+    ctx.fillStyle = this.neb2;
     ctx.fillRect(0, 0, w, h);
 
+    ctx.fillStyle = "#ffffff";
     for (const s of this.stars) {
-      const sz = s.z * 2.2;
       const tw = 0.6 + 0.4 * Math.sin(this.time * 3 + s.tw);
-      ctx.fillStyle = `rgba(255,255,255,${(0.25 + 0.7 * s.z) * tw})`;
-      ctx.fillRect(s.x * w, s.y * h, sz, sz);
+      ctx.globalAlpha = (0.25 + 0.7 * s.z) * tw;
+      ctx.fillRect(s.x * w, s.y * h, s.z * 2.2, s.z * 2.2);
     }
+    ctx.globalAlpha = 1;
 
     for (const m of this.msgs) {
       ctx.save();
@@ -658,12 +667,17 @@ export class SpaceGame {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(Math.sin(this.time * 4 + p.ph) * 0.4);
-      ctx.font = `${p.r * 2.2}px serif`;
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = p.kind === "star" ? "#ffe66d" : "#ff9f43";
+      ctx.beginPath();
+      ctx.arc(0, 0, p.r * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      if (!p.font) p.font = Math.round(p.r * 2.2) + "px serif";
+      ctx.font = p.font;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.shadowBlur = 22;
-      ctx.shadowColor = p.kind === "star" ? "#ffe66d" : "#ff9f43";
-      ctx.fillText(p.e || (p.kind === "star" ? "⭐" : "🍕"), 0, 0);
+      ctx.fillText(p.e, 0, 0);
       ctx.restore();
     }
 
@@ -671,10 +685,18 @@ export class SpaceGame {
       ctx.save();
       ctx.translate(e.x, e.y);
       ctx.rotate(e.rot * 0.5);
-      ctx.font = `${e.r * 2.1}px serif`;
+      if (e.kind === "bomb") {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = "#ff3b3b";
+        ctx.beginPath();
+        ctx.arc(0, 0, e.r * 1.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      if (!e.font) e.font = Math.round(e.r * 2.1) + "px serif";
+      ctx.font = e.font;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      if (e.kind === "bomb") { ctx.shadowBlur = 26; ctx.shadowColor = "#ff3b3b"; }
       ctx.fillText(e.e, 0, 0);
       if (e.flash > 0) {
         ctx.globalAlpha = clamp(e.flash, 0, 1) * 0.85;
@@ -704,13 +726,14 @@ export class SpaceGame {
         for (const t of b.trail) ctx.lineTo(t.x, t.y);
       }
       ctx.stroke();
-      ctx.shadowBlur = 16;
-      ctx.shadowColor = "#7ef9ff";
+      ctx.fillStyle = "rgba(126,249,255,0.3)";
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * 2.4, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = "#eaffff";
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
 
     if (this.beam > 0) {
@@ -757,11 +780,10 @@ export class SpaceGame {
     }
 
     if (this.flashRed > 0.01) {
-      const vg = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, h * 0.75);
-      vg.addColorStop(0, "rgba(255,0,60,0)");
-      vg.addColorStop(1, `rgba(255,20,60,${clamp(this.flashRed, 0, 0.7)})`);
-      ctx.fillStyle = vg;
+      ctx.globalAlpha = clamp(this.flashRed, 0, 0.7) / 0.7;
+      ctx.fillStyle = this.vigG;
       ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();

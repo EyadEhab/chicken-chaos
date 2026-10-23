@@ -31,9 +31,9 @@ const pick = (a) => a[(Math.random() * a.length) | 0];
 const rankOf = (s) => (RANKS.find(([m]) => s >= m) || RANKS[RANKS.length - 1])[1];
 
 const EMPTY = {
-  score: 0, hp: 100, maxHp: 100, level: 1, xp: 0, xpNeed: 205,
-  points: 0, combo: 0, mult: 1, ult: 0, time: 0,
-  skills: { rate: 0, dmg: 0, multi: 0, speed: 0, hull: 0, pierce: 0, crit: 0, magnet: 0 },
+  score: 0, hp: 60, maxHp: 60, level: 1, xp: 0, xpNeed: 205,
+  points: 0, up: false, combo: 0, mult: 1, ult: 0, time: 0,
+  skills: { rate: 0, multi: 0, hull: 0, pierce: 0, magnet: 0 },
 };
 
 export default function App() {
@@ -181,7 +181,7 @@ export default function App() {
               <div className="bar hp"><i style={{ width: (stats.hp / stats.maxHp) * 100 + "%" }} /><span>{stats.hp}/{stats.maxHp} HP</span></div>
               <div className="bar xp"><i style={{ width: (stats.xp / stats.xpNeed) * 100 + "%" }} /><span>LV {stats.level}</span></div>
             </div>
-            {stats.points > 0 && !panel && (
+            {stats.points > 0 && stats.up && !panel && (
               <button className="skillPing" onClick={() => { setPanel("skills"); gameRef.current?.setPaused(true); }}>
                 +{stats.points} SKILL POINT{stats.points > 1 ? "S" : ""} — SPEND THEM
               </button>
@@ -215,8 +215,8 @@ export default function App() {
                     );
                   })}
                 </div>
-                <button className="btn" disabled={stats.points > 0} onClick={closePanel}>
-                  {stats.points > 0 ? "Spend your points first!" : "Back to chaos"}
+                <button className="btn" disabled={stats.points > 0 && stats.up} onClick={closePanel}>
+                  {stats.points > 0 && stats.up ? "Spend your points first!" : "Back to chaos"}
                 </button>
               </div>
             </div>
