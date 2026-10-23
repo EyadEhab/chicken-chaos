@@ -1,34 +1,55 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { SpaceGame, SKILLS } from "./game/engine";
 
-const DB = "chickenchaos:players"; // { [name]: { best, games } }
-const ME = "chickenchaos:me";
-const GOOD = ["🐔", "🐥", "🐓"];
-const BAD = ["💣", "💩", "🌶️"];
-const ROUND = 30;
-const JOKES = [
-  "The chickens are laughing at you.",
-  "Not bad for a human.",
-  "Egg-cellent clicking!",
-  "You're on a roll... of eggs.",
-  "Chicken dinner secured!",
-  "Poop dodger of the year!",
+const DB = "astrochaos:players"; // { [name]: { best, games, kills? } }
+const ME = "astrochaos:me";
+
+const RANKS = [
+  [10000, "Certified Menace"],
+  [4000, "Galaxy Bouncer"],
+  [1500, "Captain Crunch"],
+  [500, "Space Intern"],
+  [100, "Cannon Fodder"],
+  [0, "Fresh Recruit"],
 ];
 
-const load = () => { try { return JSON.parse(localStorage.getItem(DB)) || {}; } catch { return {}; } };
+const OVER_LINES = [
+  "Your ship exploded. It was mostly tape anyway.",
+  "The aliens threw a party. You weren't invited.",
+  "Somewhere, a recruitment poster just got torn down.",
+  "Report filed: pilot was too busy showing off.",
+  "Great run! Terrible landings.",
+  "You hit everything except the escape pod.",
+  "The galaxy remains undefeated.",
+];
+
+const load = () => {
+  try { return JSON.parse(localStorage.getItem(DB)) || {}; } catch { return {}; }
+};
 const save = (d) => { try { localStorage.setItem(DB, JSON.stringify(d)); } catch {} };
-const rand = (a) => a[Math.floor(Math.random() * a.length)];
+const pick = (a) => a[(Math.random() * a.length) | 0];
+const rankOf = (s) => (RANKS.find(([m]) => s >= m) || RANKS[RANKS.length - 1])[1];
+
+const EMPTY = {
+  score: 0, hp: 100, maxHp: 100, level: 1, xp: 0, xpNeed: 205,
+  points: 0, combo: 0, mult: 1, ult: 0, time: 0,
+  skills: { rate: 0, dmg: 0, multi: 0, speed: 0, hull: 0, pierce: 0, crit: 0, magnet: 0 },
+};
 
 export default function App() {
   const [me, setMe] = useState(() => { try { return localStorage.getItem(ME) || ""; } catch { return ""; } });
   const [name, setName] = useState("");
   const [players, setPlayers] = useState(load);
   const [phase, setPhase] = useState("menu"); // menu | play | over
-  const [score, setScore] = useState(0);
-  const [time, setTime] = useState(ROUND);
-  const [items, setItems] = useState([]);
-  const [pops, setPops] = useState([]);
-  const scoreRef = useRef(0);
-  const id = useRef(0);
+  const [stats, setStats] = useState(EMPTY);
+  const [panel, setPanel] = useState(null); // null | "skills" | "pause"
+  const [result, setResult] = useState(null);
+  const [newBest, setNewBest] = useState(false);
+
+  const canvasRef = useRef(null);
+  const gameRef = useRef(null);
+  const meRef = useRef(me);
+  meRef.current = me;
 
   const login = (e) => {
     e.preventDefault();
@@ -39,97 +60,205 @@ export default function App() {
     if (!d[n]) d[n] = { best: 0, games: 0 };
     save(d); setPlayers(d); setMe(n);
   };
-  const logout = () => { try { localStorage.removeItem(ME); } catch {} setMe(""); setName(""); setPhase("menu"); };
 
-  const start = () => { scoreRef.current = 0; setScore(0); setTime(ROUND); setItems([]); setPhase("play"); };
-
-  useEffect(() => {
-    if (phase !== "play") return;
-    const clock = setInterval(() => setTime((t) => t - 1), 1000);
-    const spawn = setInterval(() => {
-      const bad = Math.random() < 0.3;
-      const it = { id: id.current++, e: rand(bad ? BAD : GOOD), bad, x: 5 + Math.random() * 80, y: 5 + Math.random() * 75 };
-      setItems((l) => [...l.slice(-6), it]);
-      setTimeout(() => setItems((l) => l.filter((i) => i.id !== it.id)), 1100);
-    }, 450);
-    return () => { clearInterval(clock); clearInterval(spawn); };
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase === "play" && time <= 0) {
-      const d = load();
-      const p = d[me] || { best: 0, games: 0 };
-      d[me] = { best: Math.max(p.best, scoreRef.current), games: p.games + 1 };
-      save(d); setPlayers(d); setPhase("over");
-    }
-  }, [time, phase, me]);
-
-  const hit = (it) => {
-    setItems((l) => l.filter((i) => i.id !== it.id));
-    const pts = it.bad ? -3 : 1;
-    scoreRef.current = Math.max(0, scoreRef.current + pts);
-    setScore(scoreRef.current);
-    const pid = id.current++;
-    setPops((l) => [...l, { id: pid, x: it.x, y: it.y, t: it.bad ? "-3 OUCH" : "+1" , bad: it.bad }]);
-    setTimeout(() => setPops((l) => l.filter((p) => p.id !== pid)), 700);
+  const logout = () => {
+    try { localStorage.removeItem(ME); } catch {}
+    setMe(""); setName(""); setPhase("menu"); setPanel(null);
   };
 
-  const board = Object.entries(players).map(([n, v]) => ({ n, ...v })).sort((a, b) => b.best - a.best).slice(0, 10);
+  const start = useCallback(() => {
+    setStats(EMPTY);
+    setResult(null);
+    setNewBest(false);
+    setPanel(null);
+    setPhase("play");
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "play" || !canvasRef.current) return;
+    const game = new SpaceGame(canvasRef.current, {
+      onStats: setStats,
+      onLevelUp: () => {
+        setPanel((c) => c || "skills");
+        gameRef.current?.setPaused(true);
+      },
+      onPause: (p) => setPanel((c) => (p ? c || "pause" : null)),
+      onGameOver: ({ score, time, level }) => {
+        const d = load();
+        const p = d[meRef.current] || { best: 0, games: 0 };
+        const best = Math.max(p.best, score);
+        setNewBest(score > p.best && score > 0);
+        d[meRef.current] = { best, games: p.games + 1 };
+        save(d); setPlayers(d);
+        setResult({ score, time, level, line: pick(OVER_LINES) });
+        setPanel(null);
+        setPhase("over");
+      },
+    });
+    gameRef.current = game;
+    return () => { game.destroy(); gameRef.current = null; };
+  }, [phase]);
+
+  const spend = (key) => {
+    const g = gameRef.current;
+    if (!g) return;
+    if (g.spend(key)) setStats(g.stats());
+  };
+
+  const closePanel = () => {
+    const g = gameRef.current;
+    if (!g) return;
+    setPanel(null);
+    g.setPaused(false);
+  };
+
+  const useUlt = () => gameRef.current?.useUlt();
+
+  const board = Object.entries(players)
+    .map(([n, v]) => ({ n, ...v }))
+    .sort((a, b) => b.best - a.best)
+    .slice(0, 10);
 
   if (!me) {
     return (
-      <main className="wrap">
-        <h1 className="logo">Chicken Chaos <span className="bob">🐔</span></h1>
-        <p className="sub">Tap the chickens. Dodge the bombs, poop and spicy peppers.</p>
+      <main className="login">
+        <div className="stars-bg" />
+        <div className="floaters" aria-hidden>
+          {["🚀", "👽", "🛸", "⭐", "💣", "🍕"].map((e, i) => (
+            <span key={i} className={"floater f" + i}>{e}</span>
+          ))}
+        </div>
+        <h1 className="logo">ASTRO CHAOS <span className="spin">🚀</span></h1>
+        <p className="sub">Infinite space. Falling aliens. Zero refunds.<br />Shoot everything. Collect stars. Get ridiculous skills.</p>
         <form onSubmit={login} className="card">
-          <label htmlFor="n">What's your name?</label>
-          <input id="n" value={name} onChange={(e) => setName(e.target.value)} placeholder="Sir Cluckington" maxLength={14} autoFocus />
-          <button className="btn" disabled={!name.trim()}>Let me in</button>
+          <label htmlFor="n">What do we call you, pilot?</label>
+          <input id="n" value={name} onChange={(e) => setName(e.target.value)} placeholder="Captain Wobble" maxLength={14} autoFocus />
+          <button className="btn" disabled={!name.trim()}>Launch me</button>
+          <p className="tiny">Name only. No password. No nonsense.</p>
         </form>
       </main>
     );
   }
 
-  return (
-    <main className="wrap">
-      <header className="top">
-        <span>Hi, <b>{me}</b>! Best: <b>{players[me]?.best ?? 0}</b></span>
-        <button className="link" onClick={logout}>Switch player</button>
-      </header>
+  const meBest = players[me]?.best ?? 0;
 
-      {phase === "play" ? (
-        <>
-          <div className="hud"><span>⭐ {score}</span><span>⏱ {time}s</span></div>
-          <div className="arena">
-            {items.map((it) => (
-              <button key={it.id} className="item" style={{ left: it.x + "%", top: it.y + "%" }}
-                onPointerDown={() => hit(it)} aria-label={it.bad ? "Bad thing" : "Chicken"}>{it.e}</button>
-            ))}
-            {pops.map((p) => (
-              <span key={p.id} className={"pop " + (p.bad ? "badpop" : "")} style={{ left: p.x + "%", top: p.y + "%" }}>{p.t}</span>
-            ))}
-          </div>
-        </>
-      ) : (
-        <section className="card center">
-          {phase === "over" ? (
-            <>
-              <h2>Time's up! You got {score}</h2>
-              <p className="sub">{score >= (players[me]?.best ?? 0) && score > 0 ? "New personal best! 🎉" : rand(JOKES)}</p>
-            </>
-          ) : (
-            <h2>Ready? You have {ROUND} seconds.</h2>
-          )}
-          <button className="btn" onClick={start}>{phase === "over" ? "Play again" : "Start"}</button>
+  return (
+    <main className="app">
+      {phase !== "play" && (
+        <header className="topbar">
+          <span className="who"> pilot <b>{me}</b> · best <b>{meBest}</b></span>
+          <button className="link" onClick={logout}>switch pilot</button>
+        </header>
+      )}
+
+      {phase === "menu" && (
+        <section className="panel center">
+          <h2 className="tag">Ready to cause problems?</h2>
+          <ul className="howto">
+            <li>🖱️ <b>Drag</b> (or A/D / ←→) to fly</li>
+            <li>🔫 <b>Auto-fire</b> is on — just aim your face</li>
+            <li>💣 Shoot bombs before they hit you</li>
+            <li>🍕 Catch pizza. ⭐ Shoot stars.</li>
+            <li>⭐ Level up → spend <b>skill points</b></li>
+          </ul>
+          <button className="btn big" onClick={start}>LAUNCH 🚀</button>
         </section>
       )}
 
-      <section className="card">
-        <h3>🏆 Leaderboard</h3>
-        {board.length === 0 ? <p className="sub">No scores yet. Be the first!</p> : (
-          <ol className="board">
-            {board.map((p) => (
-              <li key={p.n} className={p.n === me ? "me" : ""}><span>{p.n}</span><b>{p.best}</b></li>
+      {phase === "play" && (
+        <div className="stage">
+          <canvas ref={canvasRef} className="game" />
+          <div className="hud">
+            <div className="hudRow">
+              <div className="stat score">⭐ {stats.score}</div>
+              <div className="stat">LV <b>{stats.level}</b></div>
+              <div className="stat combo" data-hot={stats.combo > 4}>
+                x{stats.mult.toFixed(2)} <small>{stats.combo} combo</small>
+              </div>
+              <button className="mini" onClick={() => { setPanel("pause"); gameRef.current?.setPaused(true); }}>⏸</button>
+            </div>
+            <div className="bars">
+              <div className="bar hp"><i style={{ width: (stats.hp / stats.maxHp) * 100 + "%" }} /><span>{stats.hp}/{stats.maxHp} HP</span></div>
+              <div className="bar xp"><i style={{ width: (stats.xp / stats.xpNeed) * 100 + "%" }} /><span>LV {stats.level}</span></div>
+            </div>
+            {stats.points > 0 && !panel && (
+              <button className="skillPing" onClick={() => { setPanel("skills"); gameRef.current?.setPaused(true); }}>
+                +{stats.points} SKILL POINT{stats.points > 1 ? "S" : ""} — SPEND THEM
+              </button>
+            )}
+          </div>
+
+          <button className={"ult" + (stats.ult >= 1 ? " ready" : "")} onClick={useUlt} disabled={stats.ult < 1}>
+            <span className="ultRing" style={{ "--p": stats.ult }} />
+            <b>{stats.ult >= 1 ? "MEGA BEAM" : "CHARGING"}</b>
+            <small>{stats.ult >= 1 ? "press E" : Math.ceil((1 - stats.ult) * 18) + "s"}</small>
+          </button>
+
+          {panel === "skills" && (
+            <div className="overlay">
+              <div className="sheet">
+                <h3>🛠️ SKILL POINTS: <b>{stats.points}</b></h3>
+                <p className="tiny">Level {stats.level} · {stats.xp}/{stats.xpNeed} XP to next</p>
+                <div className="skills">
+                  {SKILLS.map((s) => {
+                    const lv = stats.skills[s.key];
+                    const full = lv >= s.max;
+                    const can = stats.points > 0 && !full;
+                    return (
+                      <button key={s.key} className={"skill" + (can ? " can" : "")} disabled={!can}
+                        onClick={() => spend(s.key)} title={s.desc}>
+                        <span className="ic">{s.icon}</span>
+                        <span className="nm">{s.name}</span>
+                        <span className="ds">{s.desc}</span>
+                        <span className="pips">{Array.from({ length: s.max }, (_, i) => <i key={i} className={i < lv ? "on" : ""} />)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button className="btn" disabled={stats.points > 0} onClick={closePanel}>
+                  {stats.points > 0 ? "Spend your points first!" : "Back to chaos"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {panel === "pause" && (
+            <div className="overlay">
+              <div className="sheet center">
+                <h3>⏸ Paused</h3>
+                <p className="tiny">The aliens are also resting. Rude.</p>
+                <button className="btn" onClick={closePanel}>Resume</button>
+                <button className="btn ghost" onClick={() => { setPanel(null); setPhase("menu"); }}>Abandon run</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === "over" && result && (
+        <section className="panel center over">
+          <h2 className="tag">💀 GAME OVER</h2>
+          <div className="bigScore">{result.score}</div>
+          <p className="tiny">{rankOf(result.score)} · level {result.level} · survived {Math.round(result.time)}s</p>
+          <p className="quip">“{result.line}”</p>
+          {newBest && <p className="best">🎉 NEW PERSONAL BEST!</p>}
+          <button className="btn big" onClick={start}>RUN IT BACK 🔁</button>
+        </section>
+      )}
+
+      <section className="board">
+        <h3>🏆 GALACTIC LEADERBOARD</h3>
+        {board.length === 0 ? (
+          <p className="tiny">Nobody has embarrassed themselves yet.</p>
+        ) : (
+          <ol>
+            {board.map((p, i) => (
+              <li key={p.n} className={p.n === me ? "me" : ""}>
+                <span className="medal">{["🥇", "🥈", "🥉"][i] || "#" + (i + 1)}</span>
+                <span className="nm">{p.n}</span>
+                <span className="rk">{rankOf(p.best)}</span>
+                <b>{p.best}</b>
+              </li>
             ))}
           </ol>
         )}
