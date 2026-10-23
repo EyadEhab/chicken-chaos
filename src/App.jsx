@@ -116,7 +116,11 @@ export default function App() {
   const spend = (key) => {
     const g = gameRef.current;
     if (!g) return;
-    if (g.spend(key)) setStats(g.stats());
+    if (g.spend(key)) {
+      setStats(g.stats());
+      setPanel(null);
+      g.setPaused(false);
+    }
   };
 
   const closePanel = () => {
